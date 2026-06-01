@@ -909,21 +909,34 @@ void ChordDetectEditor::paintPianoKeys (juce::Graphics& g, juce::Rectangle<int> 
             g.setColour (juce::Colour (C_PANEL));
             g.drawRoundedRectangle (r, 2.5f, 1.f);
 
-            // Note name on C keys + PC keyboard mapping hint
+            // Note labels + PC key letter
             {
                 static const char* WHITE_KEY_CHARS[] = {"A","S","D","F","G","H","J","K","L",";"};
-                g.setColour (virt ? juce::Colour(C_BG).withAlpha(0.7f) : juce::Colour(C_DIM));
-                g.setFont ({ 7.5f });
-                // PC key letter at bottom
+                static const char* WHITE_NOTE_NAMES[] = {"C","D","E","F","G","A","B"};
+
+                // Note name (e.g. "C3") — shown on every white key
+                juce::Colour noteCol = (pc == 0)                          // C notes: bright green
+                                     ? juce::Colour (C_GREEN).withAlpha (virt ? 0.5f : 0.75f)
+                                     : (virt ? juce::Colour(C_BG).withAlpha(0.6f)
+                                             : juce::Colour(C_PANEL).darker(0.2f));
+                g.setColour (noteCol);
+                g.setFont   ({ 8.f, juce::Font::bold });
+                juce::String noteName = juce::String (WHITE_NOTE_NAMES[k])
+                                      + juce::String (midiNote / 12 - 1);
+                g.drawText (noteName,
+                            (int)r.getX(), (int)r.getBottom() - 22, (int)wkW, 11,
+                            juce::Justification::centred);
+
+                // PC key letter directly below the note name
                 if (oct * 7 + k < 10 && pcKeysEnabled)
+                {
+                    g.setColour (virt ? juce::Colour(C_BG).withAlpha(0.5f)
+                                      : juce::Colour(C_DIM).withAlpha(0.55f));
+                    g.setFont ({ 7.f });
                     g.drawText (WHITE_KEY_CHARS[oct * 7 + k],
-                                (int)r.getX(), (int)r.getBottom() - 20, (int)wkW, 10,
+                                (int)r.getX(), (int)r.getBottom() - 11, (int)wkW, 10,
                                 juce::Justification::centred);
-                // Note name (C notes only)
-                if (WHITE_KEYS[k] == 0)
-                    g.drawText (juce::String(NOTE_NAMES[0]) + juce::String(midiNote / 12 - 1),
-                                (int)r.getX(), (int)r.getBottom() - 11, (int)wkW, 11,
-                                juce::Justification::centred);
+                }
             }
         }
 
@@ -952,6 +965,42 @@ void ChordDetectEditor::paintPianoKeys (juce::Graphics& g, juce::Rectangle<int> 
             g.fillRoundedRectangle (r, 2.5f);
             g.setColour (juce::Colour (C_BG).withAlpha (0.6f));
             g.drawRoundedRectangle (r, 2.5f, 0.5f);
+
+            // Note name on black key (written vertically using rotated graphics)
+            {
+                static const char* BLACK_KEY_CHARS[] = {"W","E","","T","Y","U","","O","P"};
+                juce::String bNoteName = juce::String (NOTE_NAMES[BLACK_KEYS[k]]);
+
+                // Draw note name sideways inside black key
+                juce::Graphics::ScopedSaveState save (g);
+                g.addTransform (juce::AffineTransform::rotation (
+                    -juce::MathConstants<float>::halfPi,
+                    r.getCentreX(), r.getCentreY()));
+
+                juce::Colour bnCol = (virt || chord || voice)
+                                   ? juce::Colour(C_BG).withAlpha(0.7f)
+                                   : juce::Colour(C_DIM).withAlpha(0.5f);
+                g.setColour (bnCol);
+                g.setFont   ({ 7.f, juce::Font::bold });
+                g.drawText  (bNoteName,
+                             (int)(r.getCentreX() - bkH * 0.5f),
+                             (int)(r.getCentreY() - bkW * 0.5f),
+                             (int)bkH, (int)bkW,
+                             juce::Justification::centred);
+
+                // PC key hint below note name
+                int pcIdx = oct * 7 + k;  // rough index into BLACK_KEY_CHARS
+                if (pcKeysEnabled && pcIdx < 9 && BLACK_KEY_CHARS[pcIdx][0] != '\0')
+                {
+                    g.setFont ({ 6.f });
+                    g.setColour (bnCol.withAlpha (0.6f));
+                    g.drawText  (juce::String (BLACK_KEY_CHARS[pcIdx]),
+                                 (int)(r.getCentreX() - bkH * 0.5f),
+                                 (int)(r.getCentreY() - bkW * 0.5f + 8),
+                                 (int)bkH, (int)bkW,
+                                 juce::Justification::centred);
+                }
+            }
         }
 }
 
