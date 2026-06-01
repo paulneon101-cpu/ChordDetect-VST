@@ -1,0 +1,34 @@
+# Build output
+build/
+out/
+cmake-build-*/
+
+# JUCE fetched by CMake (large)
+_deps/
+
+# VS / CLion
+.vs/
+.idea/
+*.user
+*.suo
+*.aps
+
+# Xcode
+*.xcworkspace
+*.xcodeproj
+DerivedData/
+
+# macOS
+.DS_Store
+*.dSYM
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Compiled plugin binaries (users build locally)
+*.vst3
+*.component
+*.aaxplugin
+*.dll
+*.exe
