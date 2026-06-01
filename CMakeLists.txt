@@ -33,6 +33,11 @@ target_sources(ChordDetect PRIVATE
     Source/PluginEditor.cpp
     Source/ChordDetector.cpp
     Source/PitchDetector.cpp
+    Source/MonoPitchDetector.cpp
+    Source/HarmonyGenerator.cpp
+    Source/AudioEffectChain.cpp
+    Source/MidiRecorder.cpp
+    Source/ChordAdvisor.cpp
 )
 
 target_include_directories(ChordDetect PRIVATE Source)

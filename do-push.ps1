@@ -1,32 +1,38 @@
-$ErrorActionPreference = "Stop"
 $git      = "C:\Program Files\Git\cmd\git.exe"
 $repoDir  = "C:\Users\Johnny Nix\Documents\ChordDetect-VST"
-$username = "paulneon101-cpu"
 $tokenFile = "C:\Users\Johnny Nix\ghtoken.txt"
 
 Set-Location $repoDir
 
-$token = ([System.IO.File]::ReadAllText($tokenFile)).Trim()
+if (-not (Test-Path $tokenFile)) { Write-Host "ERROR: token file not found." -ForegroundColor Red; exit 1 }
+$token    = ([System.IO.File]::ReadAllText($tokenFile)).Trim()
+if ($token.Length -lt 10) { Write-Host "ERROR: token file is empty." -ForegroundColor Red; exit 1 }
 
-# Stage everything and commit updates
-& $git add .
-& $git commit -m "Add pitch correction and latency control; red/green skull-mic UI"
-
-# Set remote if not already set
-$remotes = & $git remote
-if ($remotes -notcontains "origin") {
-    & $git remote add origin "https://github.com/$username/ChordDetect-VST.git"
+# Detect repo URL from existing remote, or set it
+$remoteUrl = (& $git remote get-url origin 2>$null)
+if (-not $remoteUrl) {
+    Write-Host "ERROR: No remote 'origin' set. Run: git remote add origin https://github.com/USER/ChordDetect-VST.git" -ForegroundColor Red
+    exit 1
 }
+Write-Host "Pushing to: $remoteUrl"
 
-# Auth via header (token never in URL or git log)
-& $git config --local http.extraheader "AUTHORIZATION: bearer $token"
-& $git branch -M main
-& $git push -u origin main
+$username = ($remoteUrl -replace "https://github.com/","" -replace "/.*","")
+$b64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("$username`:$token"))
 
-# Clean up
+& $git config --local http.extraheader "AUTHORIZATION: Basic $b64"
+
+$result = & $git push -u origin main 2>&1
+$success = $LASTEXITCODE -eq 0
+
 & $git config --local --unset http.extraheader
-Remove-Item $tokenFile -Force
 
-Write-Host ""
-Write-Host "Done! https://github.com/$username/ChordDetect-VST" -ForegroundColor Green
-Write-Host "Token file deleted." -ForegroundColor Yellow
+if ($success) {
+    Remove-Item $tokenFile -Force
+    Write-Host ""
+    Write-Host "Pushed! $remoteUrl" -ForegroundColor Green
+    Write-Host "Token file deleted." -ForegroundColor Yellow
+} else {
+    Write-Host ""
+    Write-Host "Push failed. Token file kept for retry." -ForegroundColor Red
+    Write-Host $result
+}
