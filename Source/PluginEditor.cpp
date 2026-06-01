@@ -122,6 +122,20 @@ void ChordDetectEditor::updatePCKeys()
     }
 }
 
+void ChordDetectEditor::toggleManual()
+{
+    showManual = !showManual;
+    manualText .setVisible (showManual);
+    closeManBtn.setVisible (showManual);
+    if (showManual)
+    {
+        manualText.setBounds (getLocalBounds().reduced (20).withTrimmedTop (50));
+        closeManBtn.setBounds (getWidth() - 120, 14, 100, 22);
+        manualText.moveCaretToTop (false);
+    }
+    repaint();
+}
+
 bool ChordDetectEditor::keyPressed (const juce::KeyPress& key, juce::Component*)
 {
     if (!pcKeysEnabled) return false;
@@ -359,6 +373,144 @@ ChordDetectEditor::ChordDetectEditor (ChordDetectProcessor& p)
     addSlider (micHitSensSlider, juce::Slider::LinearHorizontal, C_RED);
     micHitSensAtt = std::make_unique<SA>(proc.apvts, ChordDetectProcessor::PID_MIC_HIT_SENS, micHitSensSlider);
 
+    // ── User manual overlay ───────────────────────────────────────────
+    styleBtn (helpBtn, false, C_CYAN);
+    helpBtn.onClick = [this]() { toggleManual(); };
+    addAndMakeVisible (helpBtn);
+
+    styleBtn (closeManBtn, false, C_RED);
+    closeManBtn.onClick = [this]() { toggleManual(); };
+    addAndMakeVisible (closeManBtn);
+    closeManBtn.setVisible (false);
+
+    manualText.setMultiLine (true);
+    manualText.setReadOnly (true);
+    manualText.setScrollbarsShown (true);
+    manualText.setColour (juce::TextEditor::backgroundColourId,  juce::Colour (0xEE0A140A));
+    manualText.setColour (juce::TextEditor::textColourId,        juce::Colour (C_WHITE));
+    manualText.setColour (juce::TextEditor::outlineColourId,     juce::Colour (C_GREEN).withAlpha (0.4f));
+    manualText.setColour (juce::ScrollBar::thumbColourId,           juce::Colour (C_GREEN));
+    manualText.setFont   (juce::Font ("Helvetica Neue", 12.5f, juce::Font::plain));
+    manualText.setText (
+        "CHORDDETECT VST3  -  USER MANUAL\n"
+        "by Johnny Nix\n"
+        "================================================\n\n"
+
+        "CHORD DETECTION\n"
+        "---------------\n"
+        "Feed any audio (guitar, piano, synth) into the plugin input.\n"
+        "The large display shows the detected chord in real time:\n"
+        "  - Root note (e.g. C, F#, Bb)\n"
+        "  - Quality  (maj, min, 7, maj7, dim, sus4, etc.)\n"
+        "  - Individual pitch classes detected\n"
+        "Green = chord detected.  Red = no chord / silence.\n\n"
+
+        "PITCH CORRECTION  (PITCH / LATENCY strip)\n"
+        "------------------------------------------\n"
+        "Pitch Correction slider: how strictly a detected frequency must\n"
+        "align with equal temperament before it counts as a note.\n"
+        "  0%  = permissive (accepts +-50 cents off)\n"
+        "  100% = strict    (accepts +-2 cents only)\n\n"
+        "Latency buttons  LOW / BAL / HI:\n"
+        "  LOW = 512-sample FFT (~12 ms)  -  fastest response\n"
+        "  BAL = 1024-sample FFT (~23 ms) -  balanced\n"
+        "  HI  = 2048-sample FFT (~46 ms) -  most accurate pitch reading\n\n"
+
+        "HARMONY  (HARMONY strip)\n"
+        "------------------------\n"
+        "Adds MIDI harmony notes on channel 2 based on what is playing.\n"
+        "  OFF   = no harmony output\n"
+        "  +3RD  = minor or major 3rd above (based on chord quality)\n"
+        "  +5TH  = perfect 5th above\n"
+        "  +OCT  = one octave above\n"
+        "  CHORD = outputs ALL chord tones as MIDI (full chord trigger)\n\n"
+
+        "MIC > MIDI  (MIC > MIDI strip)\n"
+        "-------------------------------\n"
+        "Turn on MIC > MIDI to detect your singing / humming pitch\n"
+        "and convert it to MIDI notes on channel 1 in real time.\n"
+        "SENS slider controls how sensitive the pitch detection is:\n"
+        "  Low  = accepts any input including out-of-tune notes\n"
+        "  High = only locks onto very stable, in-tune pitches\n"
+        "Detected note shown in the chord display and lights amber on\n"
+        "the piano keyboard.\n\n"
+
+        "MIC HIT  (piano strip)\n"
+        "----------------------\n"
+        "Turns your microphone into a drum-pad instrument.\n"
+        "Any loud noise / tap on the mic fires a MIDI Note On (ch 4).\n"
+        "The note triggered is:\n"
+        "  - Your current singing pitch (if MIC > MIDI is on), or\n"
+        "  - The chord root note, or\n"
+        "  - Middle C as a fallback\n"
+        "Velocity scales with how loud the hit is.\n"
+        "SENS slider controls the volume threshold for triggering.\n\n"
+
+        "EQ  (EQ strip)\n"
+        "--------------\n"
+        "3-band parametric EQ applied to the audio output.\n"
+        "Each band has TWO knobs:\n"
+        "  Green knob = Gain  (-12 to +12 dB)\n"
+        "  Cyan knob  = Frequency (Hz)\n"
+        "Bands:\n"
+        "  BASS     -  20 to 500 Hz   (default 80 Hz)\n"
+        "  MID FREQ - 200 to 5000 Hz  (default 1 kHz)\n"
+        "  HI FREQ  - 2k  to 20k Hz   (default 8 kHz)\n\n"
+
+        "FX  (FX strip)\n"
+        "--------------\n"
+        "REVERB\n"
+        "  Room  = room size (0 = dry room, 1 = large hall)\n"
+        "  Wet   = reverb mix level\n"
+        "DELAY\n"
+        "  Time  = delay time in milliseconds (1 to 1000 ms)\n"
+        "  Fdbk  = feedback amount (how many repeats)\n"
+        "  Wet   = delay mix level\n\n"
+
+        "AI SUGGEST  (AI SUGGEST strip)\n"
+        "-------------------------------\n"
+        "Shows up to 5 chord suggestions based on music theory.\n"
+        "Suggestions update every time the detected chord changes.\n"
+        "Click any suggestion button to play that chord as MIDI (ch 3).\n"
+        "Theory used:\n"
+        "  Major chords -> IV, V7, vi, ii7, iii\n"
+        "  Minor chords -> iv, V7, bVI, bIII, bVII\n\n"
+
+        "MIDI RECORDER  (MIDI strip)\n"
+        "---------------------------\n"
+        "  REC    = start / stop recording all MIDI output\n"
+        "  CLR    = clear the recorded buffer\n"
+        "  QNT    = quantize notes to nearest 1/16th (at 120 BPM)\n"
+        "  -12 / -1 = transpose all recorded notes down\n"
+        "  +1  / +12 = transpose all recorded notes up\n"
+        "The piano roll below shows the last 30 seconds of recorded MIDI.\n"
+        "Colours: Green = chord/virtual keys, Amber = voice/mic, Cyan = harmony.\n\n"
+
+        "VIRTUAL PIANO KEYBOARD\n"
+        "----------------------\n"
+        "Click any key to play a note. Drag across keys to slide.\n\n"
+        "PC KEYBOARD MAPPING:\n"
+        "  White keys:  A  S  D  F  G  H  J  K  L  ;\n"
+        "  Notes:       C  D  E  F  G  A  B  C  D  E\n"
+        "  Black keys:  W  E     T  Y  U     O  P\n"
+        "  Notes:       C# D#    F# G# A#    C# D#\n"
+        "  Z = Octave down    X = Octave up\n\n"
+        "Press PC KEYS: ON to toggle the keyboard mapping.\n"
+        "OCT- / OCT+ buttons shift the keyboard range.\n\n"
+
+        "MIDI ROUTING SUMMARY\n"
+        "--------------------\n"
+        "  Channel 1 = Voice/Mic pitch + virtual/PC keyboard notes\n"
+        "  Channel 2 = Harmony notes\n"
+        "  Channel 3 = AI suggestion playback\n"
+        "  Channel 4 = Mic Hit drum trigger\n\n"
+
+        "================================================\n"
+        "ChordDetect VST3  v1.0  -  github.com/paulneon101-cpu/ChordDetect-VST\n"
+    );
+    manualText.setVisible (false);
+    addAndMakeVisible (manualText);
+
     // Enable keyboard focus so we receive key events
     setWantsKeyboardFocus (true);
     addKeyListener (this);
@@ -378,7 +530,9 @@ void ChordDetectEditor::resized()
     const int pad = 10;
 
     int y = 0;
-    lay.title    = {0, y, W, 46};       y += 46;
+    lay.title    = {0, y, W, 46};
+    helpBtn.setBounds (W - 34, y + 11, 24, 24);
+    y += 46;
     lay.body     = {0, y, W, 140};      y += 140;
     lay.strip1   = {0, y, W, 38};       y += 38;  // pitch + latency
     lay.strip2   = {0, y, W, 38};       y += 38;  // harmony
@@ -486,6 +640,18 @@ void ChordDetectEditor::paint (juce::Graphics& g)
     paintBackground (g);
     paintTitleBar   (g, lay.title);
     paintChordBody  (g, lay.body);
+    // Manual overlay dim layer (drawn before components render on top)
+    if (showManual)
+    {
+        g.setColour (juce::Colours::black.withAlpha (0.82f));
+        g.fillRect  (getLocalBounds());
+        g.setColour (juce::Colour (C_GREEN).withAlpha (0.6f));
+        g.setFont   (juce::Font ("Helvetica Neue", 16.f, juce::Font::bold));
+        g.drawText  ("USER MANUAL", 20, 16, getWidth() - 160, 22,
+                     juce::Justification::centredLeft);
+        return;   // skip normal UI paint while manual is open
+    }
+
     paintSectionLabel(g, lay.strip1, "PITCH / LATENCY", C_GREEN);
     paintSectionLabel(g, lay.strip2, "HARMONY",         C_AMBER);
     paintSectionLabel(g, lay.strip3, "MIC > MIDI  SENS", C_AMBER);

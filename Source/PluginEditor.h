@@ -121,6 +121,14 @@ private:
     juce::TextButton pcKeyToggleBtn { "PC KEYS: ON" };
     bool             pcKeysEnabled  { true };
 
+    // User manual overlay
+    juce::TextButton   helpBtn     { "?" };
+    juce::TextButton   closeManBtn { "X  CLOSE" };
+    juce::TextEditor   manualText;
+    bool               showManual  { false };
+    void               toggleManual();
+    void               paintManual (juce::Graphics&);
+
     // Mic Hit
     juce::TextButton micHitBtn { "MIC HIT" };
     juce::Slider     micHitSensSlider;
