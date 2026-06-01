@@ -2,22 +2,29 @@
 #include <JuceHeader.h>
 #include <vector>
 #include <set>
+#include <memory>
 
 class PitchDetector
 {
 public:
     PitchDetector();
 
-    void prepare(double sampleRate, int blockSize);
-    void processBlock(const juce::AudioBuffer<float>& buffer);
+    void prepare (double sampleRate, int blockSize);
+    void processBlock (const juce::AudioBuffer<float>& buffer);
     std::set<int> getActiveNotes() const;
 
-private:
-    static constexpr int FFT_ORDER = 11;        // 2048-point FFT
-    static constexpr int FFT_SIZE  = 1 << FFT_ORDER;
+    // 9 = 512-pt (~12 ms)  |  10 = 1024-pt (~23 ms)  |  11 = 2048-pt (~46 ms)
+    void setFFTOrder (int order);
 
-    juce::dsp::FFT                        fft;
-    juce::dsp::WindowingFunction<float>   windowing;
+    // 0 = permissive (±50 ¢)  …  100 = strict (±5 ¢)
+    void setPitchCorrection (float percent);
+
+private:
+    int   fftOrder               { 11 };
+    float pitchCorrectionPercent { 50.0f };
+
+    std::unique_ptr<juce::dsp::FFT>                      fft;
+    std::unique_ptr<juce::dsp::WindowingFunction<float>> windowing;
 
     std::vector<float> fftData;
     std::vector<float> magnitudes;
@@ -29,8 +36,9 @@ private:
     mutable juce::CriticalSection lock;
     std::set<int> activeNotes;
 
+    void initFFT();
     void runFFT();
-    int  frequencyToMidiNote(float freq) const;
+    int  frequencyToMidiNote (float freq) const;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PitchDetector)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PitchDetector)
 };

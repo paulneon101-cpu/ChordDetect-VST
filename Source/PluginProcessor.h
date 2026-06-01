@@ -18,15 +18,13 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    //==========================================================================
     const juce::String getName() const override { return "ChordDetect"; }
     bool   acceptsMidi()  const override { return false; }
     bool   producesMidi() const override { return true;  }
     bool   isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    //==========================================================================
-    int  getNumPrograms()   override { return 1; }
+    int  getNumPrograms()    override { return 1; }
     int  getCurrentProgram() override { return 0; }
     void setCurrentProgram (int) override {}
     const juce::String getProgramName (int) override { return "Default"; }
@@ -40,9 +38,22 @@ public:
     ChordDetector::ChordInfo getCurrentChord() const;
     std::set<int>            getCurrentNotes() const;
 
+    //==========================================================================
+    // Parameter IDs
+    static constexpr const char* PID_PITCH  = "pitchCorrection";
+    static constexpr const char* PID_LATENCY = "latencyMode";
+
+    juce::AudioProcessorValueTreeState apvts;
+
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+
 private:
     PitchDetector pitchDetector;
     ChordDetector chordDetector;
+
+    double currentSampleRate { 44100.0 };
+    int    currentBlockSize  { 512 };
+    int    lastLatencyMode   { 1 };
 
     mutable juce::CriticalSection dataLock;
     ChordDetector::ChordInfo currentChord;
