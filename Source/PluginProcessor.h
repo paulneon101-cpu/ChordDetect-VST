@@ -68,6 +68,8 @@ public:
     static constexpr const char* PID_DLY_FDBK    = "delayFeedback";
     static constexpr const char* PID_DLY_WET     = "delayWet";
     static constexpr const char* PID_MIDI_REC    = "midiRecord";
+    static constexpr const char* PID_MIC_HIT     = "micHit";
+    static constexpr const char* PID_MIC_HIT_SENS= "micHitSens";
 
     juce::MidiKeyboardState            keyboardState;   // virtual + hardware keyboard
     juce::AudioProcessorValueTreeState apvts;
@@ -95,6 +97,12 @@ private:
     std::set<int>                         currentNotes;
     int                                   currentVoiceNote { -1 };
     std::vector<ChordAdvisor::Suggestion> currentSuggestions;
+
+    // Mic hit detection state (audio thread only)
+    bool  micHitActive    { false };
+    int   micHitNote      { -1 };
+    float micHitEnvelope  { 0.0f };
+    static constexpr int MIC_HIT_MIDI_CH = 4;
 
     // Pending suggestion MIDI (played on next processBlock)
     juce::CriticalSection         suggLock;

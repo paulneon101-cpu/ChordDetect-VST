@@ -3,7 +3,8 @@
 #include "PluginProcessor.h"
 
 class ChordDetectEditor : public juce::AudioProcessorEditor,
-                           private juce::Timer
+                           private juce::Timer,
+                           public juce::KeyListener
 {
 public:
     explicit ChordDetectEditor (ChordDetectProcessor&);
@@ -14,6 +15,9 @@ public:
     void mouseDown (const juce::MouseEvent&) override;
     void mouseUp   (const juce::MouseEvent&) override;
     void mouseDrag (const juce::MouseEvent&) override;
+
+    bool keyPressed      (const juce::KeyPress&, juce::Component*) override;
+    bool keyStateChanged (bool isKeyDown, juce::Component*) override;
 
 private:
     void timerCallback() override;
@@ -100,14 +104,27 @@ private:
     void setupSuggestionBtns();
 
     // ── Virtual keyboard state ────────────────────────────────────────
-    int  keyboardBaseNote { 48 };     // C3 — shift with OCT- / OCT+ buttons
-    int  heldVirtualNote  { -1 };     // note currently pressed by mouse
+    int  keyboardBaseNote { 48 };     // C3 — shift with OCT- / OCT+
+    int  heldVirtualNote  { -1 };     // mouse-held note
 
     int  pianoNoteAtPoint (juce::Point<int> pos) const;
     void virtualNoteOn    (int midiNote);
     void virtualNoteOff   (int midiNote);
 
+    // PC keyboard → MIDI
+    std::set<int> pcKeysHeld;         // currently held PC-keyboard MIDI notes
+    void updatePCKeys();
+
     juce::TextButton octDownBtn { "OCT -" }, octUpBtn { "OCT +" };
+
+    // PC keyboard
+    juce::TextButton pcKeyToggleBtn { "PC KEYS: ON" };
+    bool             pcKeysEnabled  { true };
+
+    // Mic Hit
+    juce::TextButton micHitBtn { "MIC HIT" };
+    juce::Slider     micHitSensSlider;
+    std::unique_ptr<SA> micHitSensAtt;
 
     static const int WHITE_KEYS[7];
     static const int BLACK_KEYS[7];

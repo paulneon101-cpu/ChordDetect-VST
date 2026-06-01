@@ -44,6 +44,8 @@ ChordDetectProcessor::createParameterLayout()
     addFloat  (PID_DLY_FDBK,   "Delay Feedback",     0.f, 0.92f,0.3f);
     addFloat  (PID_DLY_WET,    "Delay Wet",          0.f, 1.f, 0.f);
     addBool   (PID_MIDI_REC,   "MIDI Record",        false);
+    addBool   (PID_MIC_HIT,   "Mic Hit",            false);
+    addFloat  (PID_MIC_HIT_SENS, "Mic Hit Sens",    0.f, 1.f, 0.5f);
 
     return { p.begin(), p.end() };
 }
@@ -148,6 +150,41 @@ void ChordDetectProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         midi.addEvent (juce::MidiMessage::noteOff (VOICE_MIDI_CH, lastVoiceMidiNote, (uint8_t)0), 0);
         lastVoiceMidiNote = -1;
+    }
+
+    // ── Mic Hit (noise-to-MIDI trigger) ──────────────────────────────
+    const bool  micHitOn   = apvts.getRawParameterValue(PID_MIC_HIT)     ->load() > 0.5f;
+    const float micHitSens = apvts.getRawParameterValue(PID_MIC_HIT_SENS)->load();
+    if (micHitOn)
+    {
+        float rms = buffer.getRMSLevel (0, 0, buffer.getNumSamples());
+        micHitEnvelope = (rms > micHitEnvelope)
+                       ? rms * 0.30f + micHitEnvelope * 0.70f
+                       : rms * 0.05f + micHitEnvelope * 0.95f;
+
+        const float onThresh  = 0.08f - micHitSens * 0.075f;
+        const float offThresh = onThresh * 0.40f;
+
+        if (!micHitActive && micHitEnvelope > onThresh)
+        {
+            int trigNote = (voiceNote >= 0) ? voiceNote
+                         : (chord.isValid   ? 60 + chord.rootNote : 60);
+            trigNote = juce::jlimit (0, 127, trigNote);
+            auto vel = (juce::uint8)juce::jlimit (1, 127, (int)(micHitEnvelope * 800.f));
+            midi.addEvent (juce::MidiMessage::noteOn  (MIC_HIT_MIDI_CH, trigNote, vel), 0);
+            micHitNote   = trigNote;
+            micHitActive = true;
+        }
+        else if (micHitActive && micHitEnvelope < offThresh)
+        {
+            midi.addEvent (juce::MidiMessage::noteOff (MIC_HIT_MIDI_CH, micHitNote, (juce::uint8)0), 0);
+            micHitActive = false;
+        }
+    }
+    else if (micHitActive)
+    {
+        midi.addEvent (juce::MidiMessage::noteOff (MIC_HIT_MIDI_CH, micHitNote, (juce::uint8)0), 0);
+        micHitActive = false;
     }
 
     // ── Harmony ───────────────────────────────────────────────────────

@@ -82,6 +82,73 @@ void ChordDetectEditor::mouseDrag (const juce::MouseEvent& e)
 }
 
 //==============================================================================
+// PC keyboard → MIDI
+// Layout (standard DAW):
+//   Black: W  E     T  Y  U     O  P
+//   White: A  S  D  F  G  H  J  K  L  ;
+//   Octave: Z = down,  X = up
+//==============================================================================
+static const std::pair<int,int> PC_KEY_MAP[] = {
+    // White keys (offset from base note)
+    {'a', 0}, {'s', 2}, {'d', 4}, {'f', 5}, {'g', 7},
+    {'h', 9}, {'j', 11},{'k', 12},{'l', 14},{';', 16},
+    // Black keys
+    {'w', 1}, {'e', 3}, {'t', 6}, {'y', 8}, {'u', 10},
+    {'o', 13},{'p', 15},
+};
+
+void ChordDetectEditor::updatePCKeys()
+{
+    if (!pcKeysEnabled) return;
+
+    for (auto [key, offset] : PC_KEY_MAP)
+    {
+        int  midiNote = juce::jlimit (0, 127, keyboardBaseNote + offset);
+        bool isDown   = juce::KeyPress::isKeyCurrentlyDown (key);
+        bool wasDown  = pcKeysHeld.count (midiNote) > 0;
+
+        if (isDown && !wasDown)
+        {
+            proc.keyboardState.noteOn (1, midiNote, 0.75f);
+            pcKeysHeld.insert (midiNote);
+            repaint (lay.pianoKeys);
+        }
+        else if (!isDown && wasDown)
+        {
+            proc.keyboardState.noteOff (1, midiNote, 0.f);
+            pcKeysHeld.erase (midiNote);
+            repaint (lay.pianoKeys);
+        }
+    }
+}
+
+bool ChordDetectEditor::keyPressed (const juce::KeyPress& key, juce::Component*)
+{
+    if (!pcKeysEnabled) return false;
+
+    // Octave shift — only fire once per press
+    if (key.getKeyCode() == 'z' || key.getKeyCode() == 'Z')
+    {
+        keyboardBaseNote = juce::jmax (0, keyboardBaseNote - 12);
+        repaint (lay.pianoKeys);
+        return true;
+    }
+    if (key.getKeyCode() == 'x' || key.getKeyCode() == 'X')
+    {
+        keyboardBaseNote = juce::jmin (96, keyboardBaseNote + 12);
+        repaint (lay.pianoKeys);
+        return true;
+    }
+    return false;
+}
+
+bool ChordDetectEditor::keyStateChanged (bool /*isKeyDown*/, juce::Component*)
+{
+    updatePCKeys();
+    return false;   // let other components see the event too
+}
+
+//==============================================================================
 // Helpers
 //==============================================================================
 void ChordDetectEditor::styleBtn (juce::TextButton& b, bool on, juce::uint32 onCol)
@@ -265,6 +332,37 @@ ChordDetectEditor::ChordDetectEditor (ChordDetectProcessor& p)
     addAndMakeVisible (octDownBtn);
     addAndMakeVisible (octUpBtn);
 
+    // PC keyboard toggle
+    styleBtn (pcKeyToggleBtn, true, C_GREEN);
+    pcKeyToggleBtn.onClick = [this]() {
+        pcKeysEnabled = !pcKeysEnabled;
+        pcKeyToggleBtn.setButtonText (pcKeysEnabled ? "PC KEYS: ON" : "PC KEYS: OFF");
+        styleBtn (pcKeyToggleBtn, pcKeysEnabled, C_GREEN);
+        if (!pcKeysEnabled) {
+            for (int n : pcKeysHeld) proc.keyboardState.noteOff (1, n, 0.f);
+            pcKeysHeld.clear();
+        }
+    };
+    addAndMakeVisible (pcKeyToggleBtn);
+
+    // Mic Hit button
+    styleBtn (micHitBtn, false, C_RED);
+    micHitBtn.onClick = [this]() {
+        auto* p = dynamic_cast<juce::AudioParameterBool*>(
+            proc.apvts.getParameter (ChordDetectProcessor::PID_MIC_HIT));
+        if (p) p->setValueNotifyingHost (p->get() ? 0.f : 1.f);
+        bool on = proc.apvts.getRawParameterValue (ChordDetectProcessor::PID_MIC_HIT)->load() > 0.5f;
+        styleBtn (micHitBtn, on, C_RED);
+    };
+    addAndMakeVisible (micHitBtn);
+
+    addSlider (micHitSensSlider, juce::Slider::LinearHorizontal, C_RED);
+    micHitSensAtt = std::make_unique<SA>(proc.apvts, ChordDetectProcessor::PID_MIC_HIT_SENS, micHitSensSlider);
+
+    // Enable keyboard focus so we receive key events
+    setWantsKeyboardFocus (true);
+    addKeyListener (this);
+
     startTimerHz (15);
 }
 
@@ -352,12 +450,16 @@ void ChordDetectEditor::resized()
         for (int i=0;i<5;++i)
             suggBtn[i].setBounds(r.getX()+labelW+i*bw, r.getY(), bw-2, r.getHeight());
     }
-    // Octave buttons — sit inside the piano key area, top-left corner
+    // Controls row at top of piano key area
     {
         int bx = lay.pianoKeys.getX() + pad;
         int by = lay.pianoKeys.getY() + 4;
-        octDownBtn.setBounds (bx,       by, 46, 18);
-        octUpBtn  .setBounds (bx + 48,  by, 46, 18);
+        int bh = 18;
+        octDownBtn    .setBounds (bx,        by, 46, bh);
+        octUpBtn      .setBounds (bx + 48,   by, 46, bh);
+        pcKeyToggleBtn.setBounds (bx + 100,  by, 96, bh);
+        micHitBtn     .setBounds (bx + 202,  by, 70, bh);
+        micHitSensSlider.setBounds (bx + 278, by, W - bx - 278 - pad, bh);
     }
 
     // MIDI control bar
@@ -769,11 +871,11 @@ void ChordDetectEditor::paintPianoKeys (juce::Graphics& g, juce::Rectangle<int> 
                           + " - "
                           + juce::String (NOTE_NAMES[(hiOct - 1) % 12])
                           + juce::String ((hiOct - 1) / 12 - 1)
-                          + "  (click to play)";
+                          + "  |  click or A-L keys  |  Z/X = oct shift";
     g.setColour (juce::Colour (C_DIM));
-    g.setFont ({ 9.5f });
-    g.drawText (octLabel, (int)topStrip.getX() + 106, (int)topStrip.getY(),
-                (int)topStrip.getWidth() - 110, (int)topStrip.getHeight(),
+    g.setFont ({ 9.f });
+    g.drawText (octLabel, (int)topStrip.getX() + 360, (int)topStrip.getY(),
+                (int)topStrip.getWidth() - 364, (int)topStrip.getHeight(),
                 juce::Justification::centredLeft);
 
     // White keys
@@ -807,14 +909,21 @@ void ChordDetectEditor::paintPianoKeys (juce::Graphics& g, juce::Rectangle<int> 
             g.setColour (juce::Colour (C_PANEL));
             g.drawRoundedRectangle (r, 2.5f, 1.f);
 
-            // Note name on C keys
-            if (WHITE_KEYS[k] == 0)
+            // Note name on C keys + PC keyboard mapping hint
             {
-                g.setColour (juce::Colour (C_DIM));
-                g.setFont ({ 8.f });
-                g.drawText (juce::String (NOTE_NAMES[0]) + juce::String (midiNote / 12 - 1),
-                            (int)r.getX(), (int)r.getBottom() - 12, (int)wkW, 12,
-                            juce::Justification::centred);
+                static const char* WHITE_KEY_CHARS[] = {"A","S","D","F","G","H","J","K","L",";"};
+                g.setColour (virt ? juce::Colour(C_BG).withAlpha(0.7f) : juce::Colour(C_DIM));
+                g.setFont ({ 7.5f });
+                // PC key letter at bottom
+                if (oct * 7 + k < 10 && pcKeysEnabled)
+                    g.drawText (WHITE_KEY_CHARS[oct * 7 + k],
+                                (int)r.getX(), (int)r.getBottom() - 20, (int)wkW, 10,
+                                juce::Justification::centred);
+                // Note name (C notes only)
+                if (WHITE_KEYS[k] == 0)
+                    g.drawText (juce::String(NOTE_NAMES[0]) + juce::String(midiNote / 12 - 1),
+                                (int)r.getX(), (int)r.getBottom() - 11, (int)wkW, 11,
+                                juce::Justification::centred);
             }
         }
 
